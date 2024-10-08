@@ -650,7 +650,10 @@ namespace Controllers
         }
 
         [HttpGet("masters/{masterId}/balance")]
-        public async Task<IActionResult> GetMasterBalance(int masterId, [FromQuery] DateTime? date = null)
+        public async Task<IActionResult> GetMasterBalance(
+            int masterId, 
+            [FromQuery] DateTime? dateFrom = null, 
+            [FromQuery] DateTime? dateTo = null)
         {
             var authHeader = Request.Headers["Authorization"].ToString();
             if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
@@ -675,25 +678,28 @@ namespace Controllers
                 return NotFound("Master not found.");
             }
 
-            date ??= DateTime.Now.Date;
+            dateFrom ??= DateTime.Now.Date;
+            dateTo ??= DateTime.Now.Date;
 
-            var todaysOperations = await _context.OperationHistory
-                .Where(op => op.MasterId == masterId && op.OperationDate.Date == date.Value.Date)
+            var operationsInRange = await _context.OperationHistory
+                .Where(op => op.MasterId == masterId 
+                            && op.OperationDate.Date >= dateFrom.Value.Date 
+                            && op.OperationDate.Date <= dateTo.Value.Date)
                 .ToListAsync();
 
-            var allExpenses = await _context.OperationHistory
-                .Where(op => op.MasterId == masterId && op.OperationType == "expense")
-                .ToListAsync();
+            var allExpenses = operationsInRange
+                .Where(op => op.OperationType == "expense")
+                .ToList();
 
-            var allIncomes = await _context.OperationHistory
-                .Where(op => op.MasterId == masterId && op.OperationType == "income")
-                .ToListAsync();
+            var allIncomes = operationsInRange
+                .Where(op => op.OperationType == "income")
+                .ToList();
 
             var response = new
             {
                 masterId = master.Id,
                 balance = master.Salary?.Balance ?? 0,
-                todaysOperations,
+                operationsInRange,
                 allExpenses,
                 allIncomes
             };
