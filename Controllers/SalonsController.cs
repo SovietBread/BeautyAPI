@@ -681,17 +681,20 @@ namespace Controllers
             dateFrom ??= DateTime.Now.Date;
             dateTo ??= DateTime.Now.Date;
 
-            var operationsInRange = await _context.OperationHistory
-                .Where(op => op.MasterId == masterId 
-                            && op.OperationDate.Date >= dateFrom.Value.Date 
-                            && op.OperationDate.Date <= dateTo.Value.Date)
+            var allOperations = await _context.OperationHistory
+                .Where(op => op.MasterId == masterId)
                 .ToListAsync();
 
-            var allExpenses = operationsInRange
+            var operationsInRange = allOperations
+                .Where(op => op.OperationDate.Date >= dateFrom.Value.Date 
+                            && op.OperationDate.Date <= dateTo.Value.Date)
+                .ToList();
+
+            var allExpenses = allOperations
                 .Where(op => op.OperationType == "expense")
                 .ToList();
 
-            var allIncomes = operationsInRange
+            var allIncomes = allOperations
                 .Where(op => op.OperationType == "income")
                 .ToList();
 
