@@ -1460,16 +1460,14 @@ namespace Controllers
                 !data.RootElement.TryGetProperty("expenseDate", out var expenseDateProp) ||
                 !data.RootElement.TryGetProperty("comment", out var commentProp) ||
                 !data.RootElement.TryGetProperty("isSalary", out var isSalaryProp) ||
-                !data.RootElement.TryGetProperty("employeeId", out var employeeIdProp) ||
                 !data.RootElement.TryGetProperty("deductFromCash", out var deductFromCashProp))
             {
-                return BadRequest("All fields are required.");
+                return BadRequest("All required fields are missing.");
             }
 
             int salonId;
             if (salonIdProp.ValueKind == JsonValueKind.String)
             {
-                Console.WriteLine($"Received salonId as string: {salonIdProp.GetString()}");
                 if (!int.TryParse(salonIdProp.GetString(), out salonId))
                 {
                     return BadRequest("Invalid salonId.");
@@ -1483,7 +1481,6 @@ namespace Controllers
             decimal cashAmount;
             if (cashAmountProp.ValueKind == JsonValueKind.String)
             {
-                Console.WriteLine($"Received cashAmount as string: {cashAmountProp.GetString()}");
                 if (!decimal.TryParse(cashAmountProp.GetString(), out cashAmount))
                 {
                     return BadRequest("Invalid cashAmount.");
@@ -1497,7 +1494,6 @@ namespace Controllers
             decimal cardAmount;
             if (cardAmountProp.ValueKind == JsonValueKind.String)
             {
-                Console.WriteLine($"Received cardAmount as string: {cardAmountProp.GetString()}");
                 if (!decimal.TryParse(cardAmountProp.GetString(), out cardAmount))
                 {
                     return BadRequest("Invalid cardAmount.");
@@ -1511,19 +1507,28 @@ namespace Controllers
             var expenseDate = expenseDateProp.GetDateTime();
             var comment = commentProp.GetString();
             var isSalary = isSalaryProp.GetBoolean();
-            
-            int employeeId;
-            if (employeeIdProp.ValueKind == JsonValueKind.String)
+            int? employeeId = null; // EmployeeId может быть null
+
+            if (isSalary)
             {
-                Console.WriteLine($"Received employeeId as string: {employeeIdProp.GetString()}");
-                if (!int.TryParse(employeeIdProp.GetString(), out employeeId))
+                // Только если это зарплата, проверяем наличие employeeId
+                if (!data.RootElement.TryGetProperty("employeeId", out var employeeIdProp))
                 {
-                    return BadRequest("Invalid employeeId.");
+                    return BadRequest("EmployeeId is required for salary expenses.");
                 }
-            }
-            else
-            {
-                employeeId = employeeIdProp.GetInt32();
+
+                if (employeeIdProp.ValueKind == JsonValueKind.String)
+                {
+                    if (!int.TryParse(employeeIdProp.GetString(), out var tempEmployeeId))
+                    {
+                        return BadRequest("Invalid employeeId.");
+                    }
+                    employeeId = tempEmployeeId;
+                }
+                else
+                {
+                    employeeId = employeeIdProp.GetInt32();
+                }
             }
 
             var deductFromCash = deductFromCashProp.GetBoolean();
@@ -1542,7 +1547,7 @@ namespace Controllers
                 ExpenseDate = expenseDate,
                 Comment = comment,
                 IsSalary = isSalary,
-                EmployeeId = employeeId,
+                EmployeeId = employeeId, // может быть null для не-зарплатных расходов
                 DeductFromCash = deductFromCash
             };
 
@@ -1553,7 +1558,7 @@ namespace Controllers
             {
                 var operationHistory = new OperationHistory
                 {
-                    MasterId = employeeId,
+                    MasterId = employeeId.Value, // Убедитесь, что employeeId не null
                     Amount = cashAmount + cardAmount,
                     OperationType = "expense",
                     OperationDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
@@ -1565,11 +1570,12 @@ namespace Controllers
 
             if (isSalary && deductFromCash)
             {
-                return await WithdrawFromMasterBalance(employeeId, cashAmount);
+                return await WithdrawFromMasterBalance(employeeId.Value, cashAmount); // Убедитесь, что employeeId не null
             }
 
             return CreatedAtAction(nameof(GetExpenseById), new { id = expense.Id }, expense);
         }
+
 
         private async Task<IActionResult> WithdrawFromMasterBalance(int masterId, decimal amount)
         {
