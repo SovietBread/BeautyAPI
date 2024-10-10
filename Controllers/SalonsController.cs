@@ -1038,7 +1038,6 @@ namespace Controllers
             var qrGenerator = new QRCodeGenerator();
             var qrCodeData = qrGenerator.CreateQrCode(code, QRCodeGenerator.ECCLevel.Q);
 
-            // Создаём QR-код в формате PNG с прозрачным фоном
             using var qrCode = new PngByteQRCode(qrCodeData);
             var qrCodeBytes = qrCode.GetGraphic(20, Color.Black, Color.Transparent);
 
@@ -1046,129 +1045,141 @@ namespace Controllers
         }
 
         [HttpPost("appointment")]
-        public async Task<IActionResult> CreateAppointment()
+public async Task<IActionResult> CreateAppointment()
+{
+    var authHeader = Request.Headers["Authorization"].ToString();
+    if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
+    {
+        return Unauthorized("Invalid or missing token.");
+    }
+
+    var accessToken = authHeader.Substring("Bearer ".Length).Trim();
+    var user = await _context.Users.FirstOrDefaultAsync(u => u.AccessToken == accessToken);
+
+    using var reader = new StreamReader(Request.Body);
+    var body = await reader.ReadToEndAsync();
+    var data = JsonDocument.Parse(body).RootElement;
+
+    // Проверяем на наличие всех обязательных полей
+    if (!data.TryGetProperty("clientName", out var clientNameProp) ||
+        !data.TryGetProperty("masterId", out var masterIdProp) ||
+        !data.TryGetProperty("procedureId", out var procedureIdProp) ||
+        !data.TryGetProperty("cashAmount", out var cashAmountProp) ||
+        !data.TryGetProperty("cardAmount", out var cardAmountProp) ||
+        !data.TryGetProperty("fakeAmount", out var fakeAmountProp) ||
+        !data.TryGetProperty("grouponAmount", out var grouponAmountProp) ||
+        !data.TryGetProperty("salonId", out var salonIdProp) ||
+        !data.TryGetProperty("appointmentDate", out var appointmentDateProp))
+    {
+        return BadRequest("All fields are required.");
+    }
+
+    // Получаем значения полей
+    var salonId = salonIdProp.GetInt32();
+    var masterId = masterIdProp.GetInt32();
+    var procedureId = procedureIdProp.GetInt32();
+    var cashAmount = cashAmountProp.GetDecimal();
+    var cardAmount = cardAmountProp.GetDecimal();
+    var fakeAmount = fakeAmountProp.GetDecimal();
+    var grouponAmount = grouponAmountProp.GetDecimal();
+    var appointmentDate = appointmentDateProp.GetDateTime();
+    var clientName = clientNameProp.GetString();
+    
+    // Получаем необязательное поле isCanceled
+    var isCanceled = false; // По умолчанию false
+    if (data.TryGetProperty("isCanceled", out var isCanceledProp))
+    {
+        isCanceled = isCanceledProp.GetBoolean();
+    }
+
+    appointmentDate = DateTime.SpecifyKind(appointmentDate, DateTimeKind.Utc);
+
+    // Проверка на наличие салона, мастера и процедуры
+    var salon = await _context.Salons.FindAsync(salonId);
+    if (salon == null)
+    {
+        return NotFound("Salon not found.");
+    }
+
+    var master = await _context.Masters.FindAsync(masterId);
+    if (master == null)
+    {
+        return NotFound("Master not found.");
+    }
+
+    var procedure = await _context.Procedures.FindAsync(procedureId);
+    if (procedure == null)
+    {
+        return NotFound("Procedure not found.");
+    }
+
+    string? comment = null;
+    if (data.TryGetProperty("comment", out var commentProp))
+    {
+        comment = commentProp.GetString();
+    }
+
+    var appointment = new Appointment
+    {
+        ClientName = clientName,
+        MasterId = masterId,
+        ProcedureId = procedureId,
+        CashAmount = cashAmount,
+        CardAmount = cardAmount,
+        FakeAmount = fakeAmount,
+        GrouponAmount = grouponAmount,
+        SalonId = salonId,
+        AppointmentDate = appointmentDate,
+        Comment = comment
+    };
+
+    _context.Appointments.Add(appointment);
+    await _context.SaveChangesAsync();
+
+    var odsetek = await _context.Odsetek
+        .FirstOrDefaultAsync(o => o.MasterId == masterId && o.ProcedureId == procedureId);
+
+    if (odsetek == null)
+    {
+        return BadRequest("No percentage found for this master and procedure.");
+    }
+
+    var totalAmount = cashAmount + cardAmount + fakeAmount + grouponAmount;
+    var percentage = odsetek.Percentage;
+    var amountToAdd = (totalAmount * percentage) / 100;
+
+    var salary = await _context.Salary.FirstOrDefaultAsync(s => s.MasterId == masterId);
+    if (salary == null)
+    {
+        salary = new Salary
         {
-            var authHeader = Request.Headers["Authorization"].ToString();
-            if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
-            {
-                return Unauthorized("Invalid or missing token.");
-            }
+            MasterId = masterId,
+            Balance = amountToAdd
+        };
+        _context.Salary.Add(salary);
+    }
+    else
+    {
+        salary.Balance += amountToAdd;
+        _context.Salary.Update(salary);
+    }
 
-            var accessToken = authHeader.Substring("Bearer ".Length).Trim();
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.AccessToken == accessToken);
+    var operationHistory = new OperationHistory
+    {
+        MasterId = masterId,
+        Amount = amountToAdd,
+        OperationType = "income",
+        OperationDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+        IsCanceled = false
+    };
 
-            using var reader = new StreamReader(Request.Body);
-            var body = await reader.ReadToEndAsync();
-            var data = JsonDocument.Parse(body).RootElement;
+    _context.OperationHistory.Add(operationHistory);
 
-            if (!data.TryGetProperty("clientName", out var clientNameProp) ||
-                !data.TryGetProperty("masterId", out var masterIdProp) ||
-                !data.TryGetProperty("procedureId", out var procedureIdProp) ||
-                !data.TryGetProperty("cashAmount", out var cashAmountProp) ||
-                !data.TryGetProperty("cardAmount", out var cardAmountProp) ||
-                !data.TryGetProperty("fakeAmount", out var fakeAmountProp) ||
-                !data.TryGetProperty("grouponAmount", out var grouponAmountProp) ||
-                !data.TryGetProperty("salonId", out var salonIdProp) ||
-                !data.TryGetProperty("appointmentDate", out var appointmentDateProp))
-            {
-                return BadRequest("All fields are required.");
-            }
+    await _context.SaveChangesAsync();
 
-            var salonId = salonIdProp.GetInt32();
-            var masterId = masterIdProp.GetInt32();
-            var procedureId = procedureIdProp.GetInt32();
-            var cashAmount = cashAmountProp.GetDecimal();
-            var cardAmount = cardAmountProp.GetDecimal();
-            var fakeAmount = fakeAmountProp.GetDecimal();
-            var grouponAmount = grouponAmountProp.GetDecimal();
-            var appointmentDate = appointmentDateProp.GetDateTime();
-            var clientName = clientNameProp.GetString();
+    return CreatedAtAction(nameof(GetAppointmentById), new { id = appointment.Id }, appointment);
+}
 
-            appointmentDate = DateTime.SpecifyKind(appointmentDate, DateTimeKind.Utc);
-
-            var salon = await _context.Salons.FindAsync(salonId);
-            if (salon == null)
-            {
-                return NotFound("Salon not found.");
-            }
-
-            var master = await _context.Masters.FindAsync(masterId);
-            if (master == null)
-            {
-                return NotFound("Master not found.");
-            }
-
-            var procedure = await _context.Procedures.FindAsync(procedureId);
-            if (procedure == null)
-            {
-                return NotFound("Procedure not found.");
-            }
-
-            string? comment = null;
-            if (data.TryGetProperty("comment", out var commentProp))
-            {
-                comment = commentProp.GetString();
-            }
-
-            var appointment = new Appointment
-            {
-                ClientName = clientName,
-                MasterId = masterId,
-                ProcedureId = procedureId,
-                CashAmount = cashAmount,
-                CardAmount = cardAmount,
-                FakeAmount = fakeAmount,
-                GrouponAmount = grouponAmount,
-                SalonId = salonId,
-                AppointmentDate = appointmentDate,
-                Comment = comment
-            };
-
-            _context.Appointments.Add(appointment);
-            await _context.SaveChangesAsync();
-
-            var odsetek = await _context.Odsetek
-                .FirstOrDefaultAsync(o => o.MasterId == masterId && o.ProcedureId == procedureId);
-
-            if (odsetek == null)
-            {
-                return BadRequest("No percentage found for this master and procedure.");
-            }
-
-            var totalAmount = cashAmount + cardAmount + fakeAmount + grouponAmount;
-            var percentage = odsetek.Percentage;
-            var amountToAdd = (totalAmount * percentage) / 100;
-
-            var salary = await _context.Salary.FirstOrDefaultAsync(s => s.MasterId == masterId);
-            if (salary == null)
-            {
-                salary = new Salary
-                {
-                    MasterId = masterId,
-                    Balance = amountToAdd
-                };
-                _context.Salary.Add(salary);
-            }
-            else
-            {
-                salary.Balance += amountToAdd;
-                _context.Salary.Update(salary);
-            }
-
-            var operationHistory = new OperationHistory
-            {
-                MasterId = masterId,
-                Amount = amountToAdd,
-                OperationType = "income",
-                OperationDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
-            };
-
-            _context.OperationHistory.Add(operationHistory);
-
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetAppointmentById), new { id = appointment.Id }, appointment);
-        }
 
 
         [HttpPut("appointment/{id}")]
@@ -1254,7 +1265,34 @@ namespace Controllers
                 return NotFound("Appointment not found.");
             }
 
+            var odsetek = await _context.Odsetek
+                .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId && o.ProcedureId == appointment.ProcedureId);
+
+            if (odsetek == null)
+            {
+                return BadRequest("No percentage found for this master and procedure.");
+            }
+
+            var totalAmount = appointment.CashAmount + appointment.CardAmount + appointment.FakeAmount + appointment.GrouponAmount;
+            var percentage = odsetek.Percentage;
+            var amountToFind = (totalAmount * percentage) / 100;
+
+            var operationHistory = await _context.OperationHistory
+                .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId &&
+                                        o.Amount == amountToFind &&
+                                        o.OperationType == "income" &&
+                                        o.OperationDate.Date == appointment.AppointmentDate.Date);
+
+            if (operationHistory == null)
+            {
+                return NotFound("Operation history not found.");
+            }
+
+            operationHistory.IsCanceled = true;
+            _context.OperationHistory.Update(operationHistory);
+
             _context.Appointments.Remove(appointment);
+
             await _context.SaveChangesAsync();
 
             return Ok();

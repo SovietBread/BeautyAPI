@@ -93,6 +93,7 @@ namespace Models
         public decimal Amount { get; set; }
         public string OperationType { get; set; } = string.Empty;
         public DateTime OperationDate { get; set; }
+        public bool IsCanceled { get; set; }
 
         public Master Master { get; set; } = null!;
     }
