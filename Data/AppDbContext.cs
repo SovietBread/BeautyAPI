@@ -409,6 +409,10 @@ namespace Data
                 .HasColumnName("master_id");
 
             modelBuilder.Entity<OperationHistory>()
+                .Property(oh => oh.IsCanceled)
+                .HasColumnName("is_canceled");
+
+            modelBuilder.Entity<OperationHistory>()
                 .Property(oh => oh.Amount)
                 .HasColumnName("amount")
                 .HasColumnType("decimal(10, 2)");
