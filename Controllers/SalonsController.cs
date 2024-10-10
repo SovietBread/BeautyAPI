@@ -1265,7 +1265,6 @@ public async Task<IActionResult> CreateAppointment()
                 return NotFound("Appointment not found.");
             }
 
-            // Найти проценты мастера с процедуры
             var odsetek = await _context.Odsetek
                 .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId && o.ProcedureId == appointment.ProcedureId);
 
@@ -1276,16 +1275,14 @@ public async Task<IActionResult> CreateAppointment()
 
             var totalAmount = appointment.CashAmount + appointment.CardAmount + appointment.FakeAmount + appointment.GrouponAmount;
             var percentage = odsetek.Percentage;
-            var amountToFind = (totalAmount * percentage) / 100;
+            var amountToFind = Math.Round((totalAmount * percentage) / 100, 2);
 
-            // Найти запись в operation_history по MasterId, Amount и OperationType
             var operationHistory = await _context.OperationHistory
                 .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId &&
                                         o.Amount == amountToFind &&
                                         o.OperationType == "income" &&
                                         o.OperationDate.Date == appointment.AppointmentDate.Date);
 
-            // Если запись не найдена, выводим подробные сообщения
             if (operationHistory == null)
             {
                 Console.WriteLine("Operation history not found.");
