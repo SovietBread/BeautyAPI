@@ -1277,23 +1277,27 @@ public async Task<IActionResult> CreateAppointment()
             var percentage = odsetek.Percentage;
             var amountToFind = (totalAmount * percentage) / 100;
 
-            Console.WriteLine(totalAmount);
-            Console.WriteLine(percentage);
-            Console.WriteLine(amountToFind);
-
             var operationHistory = await _context.OperationHistory
-                .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId &&
-                                        o.Amount == amountToFind &&
-                                        o.OperationType == "income" &&
-                                        o.OperationDate.Date == appointment.AppointmentDate.Date);
+                .Where(o => o.MasterId == appointment.MasterId &&
+                            o.Amount == amountToFind &&
+                            o.OperationType == "income")
+                .ToListAsync();
 
-            if (operationHistory == null)
+            foreach (var o in operationHistory)
+            {
+                Console.WriteLine($"Operation Date: {o.OperationDate.Date}, Appointment Date: {appointment.AppointmentDate.Date}");
+            }
+
+            var matchingHistory = operationHistory
+                .FirstOrDefault(o => o.OperationDate.Date == appointment.AppointmentDate.Date);
+
+            if (matchingHistory == null)
             {
                 return NotFound("Operation history not found.");
             }
 
-            operationHistory.IsCanceled = true;
-            _context.OperationHistory.Update(operationHistory);
+            matchingHistory.IsCanceled = true;
+            _context.OperationHistory.Update(matchingHistory);
 
             _context.Appointments.Remove(appointment);
 
