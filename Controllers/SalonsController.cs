@@ -1277,6 +1277,10 @@ public async Task<IActionResult> CreateAppointment()
             var percentage = odsetek.Percentage;
             var amountToFind = (totalAmount * percentage) / 100;
 
+            Console.WriteLine(totalAmount);
+            Console.WriteLine(percentage);
+            Console.WriteLine(amountToFind);
+
             var operationHistory = await _context.OperationHistory
                 .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId &&
                                         o.Amount == amountToFind &&
