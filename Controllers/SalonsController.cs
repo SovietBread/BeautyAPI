@@ -1285,33 +1285,12 @@ public async Task<IActionResult> CreateAppointment()
                                         o.OperationType == "income" &&
                                         o.OperationDate.Date == appointment.AppointmentDate.Date);
 
+            // Если запись не найдена, выводим подробные сообщения
             if (operationHistory == null)
             {
-                // Проверяем, что именно не подошло
-                var errorMessages = new List<string>();
-
-                // Проверяем условия по каждому из параметров
-                if (await _context.OperationHistory.FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId) == null)
-                {
-                    errorMessages.Add("No operation history found for the specified MasterId.");
-                }
-                
-                if (await _context.OperationHistory.FirstOrDefaultAsync(o => o.Amount == amountToFind) == null)
-                {
-                    errorMessages.Add($"No operation history found with the specified amount: {amountToFind}.");
-                }
-                
-                if (await _context.OperationHistory.FirstOrDefaultAsync(o => o.OperationType == "income") == null)
-                {
-                    errorMessages.Add("No operation history found with the specified OperationType: income.");
-                }
-                
-                if (await _context.OperationHistory.FirstOrDefaultAsync(o => o.OperationDate.Date == appointment.AppointmentDate.Date) == null)
-                {
-                    errorMessages.Add($"No operation history found for the specified date: {appointment.AppointmentDate.Date}.");
-                }
-
-                return NotFound(string.Join(" ", errorMessages));
+                Console.WriteLine("Operation history not found.");
+                Console.WriteLine($"Search criteria - MasterId: {appointment.MasterId}, Amount: {amountToFind}, OperationType: 'income', AppointmentDate: {appointment.AppointmentDate.Date}");
+                return NotFound("Operation history not found. Check the logs for details.");
             }
 
             // Обновить поле is_canceled
