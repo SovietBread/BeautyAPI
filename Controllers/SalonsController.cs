@@ -1265,6 +1265,7 @@ public async Task<IActionResult> CreateAppointment()
                 return NotFound("Appointment not found.");
             }
 
+            // Найти проценты мастера с процедуры
             var odsetek = await _context.Odsetek
                 .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId && o.ProcedureId == appointment.ProcedureId);
 
@@ -1277,30 +1278,50 @@ public async Task<IActionResult> CreateAppointment()
             var percentage = odsetek.Percentage;
             var amountToFind = (totalAmount * percentage) / 100;
 
+            // Найти запись в operation_history по MasterId, Amount и OperationType
             var operationHistory = await _context.OperationHistory
-                .Where(o => o.MasterId == appointment.MasterId &&
-                            o.Amount == amountToFind &&
-                            o.OperationType == "income")
-                .ToListAsync();
+                .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId &&
+                                        o.Amount == amountToFind &&
+                                        o.OperationType == "income" &&
+                                        o.OperationDate.Date == appointment.AppointmentDate.Date);
 
-            foreach (var o in operationHistory)
+            if (operationHistory == null)
             {
-                Console.WriteLine($"Operation Date: {o.OperationDate.Date}, Appointment Date: {appointment.AppointmentDate.Date}");
+                // Проверяем, что именно не подошло
+                var errorMessages = new List<string>();
+
+                // Проверяем условия по каждому из параметров
+                if (await _context.OperationHistory.FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId) == null)
+                {
+                    errorMessages.Add("No operation history found for the specified MasterId.");
+                }
+                
+                if (await _context.OperationHistory.FirstOrDefaultAsync(o => o.Amount == amountToFind) == null)
+                {
+                    errorMessages.Add($"No operation history found with the specified amount: {amountToFind}.");
+                }
+                
+                if (await _context.OperationHistory.FirstOrDefaultAsync(o => o.OperationType == "income") == null)
+                {
+                    errorMessages.Add("No operation history found with the specified OperationType: income.");
+                }
+                
+                if (await _context.OperationHistory.FirstOrDefaultAsync(o => o.OperationDate.Date == appointment.AppointmentDate.Date) == null)
+                {
+                    errorMessages.Add($"No operation history found for the specified date: {appointment.AppointmentDate.Date}.");
+                }
+
+                return NotFound(string.Join(" ", errorMessages));
             }
 
-            var matchingHistory = operationHistory
-                .FirstOrDefault(o => o.OperationDate.Date == appointment.AppointmentDate.Date);
+            // Обновить поле is_canceled
+            operationHistory.IsCanceled = true;
+            _context.OperationHistory.Update(operationHistory);
 
-            if (matchingHistory == null)
-            {
-                return NotFound("Operation history not found.");
-            }
-
-            matchingHistory.IsCanceled = true;
-            _context.OperationHistory.Update(matchingHistory);
-
+            // Удалить запись о приеме
             _context.Appointments.Remove(appointment);
 
+            // Сохранить изменения
             await _context.SaveChangesAsync();
 
             return Ok();
