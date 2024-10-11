@@ -425,7 +425,7 @@ namespace Data
             modelBuilder.Entity<OperationHistory>()
                 .Property(oh => oh.OperationDate)
                 .HasColumnName("operation_date")
-                .HasColumnType("timestamp without time zone");
+                .HasColumnType("timestamp with time zone");
 
             // modelBuilder.Entity<OperationHistory>()
             //     .HasOne(oh => oh.Master)
