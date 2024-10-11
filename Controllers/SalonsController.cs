@@ -1279,7 +1279,7 @@ namespace Controllers
                 .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId &&
                                         o.Amount == amountToFind &&
                                         o.OperationType == "income" &&
-                                        o.OperationDate.Date == appointment.AppointmentDate.Date);
+                                        o.OperationDate.Date == appointment.AppointmentDate.Date.ToUniversalTime());
 
             if (operationHistory == null)
             {
