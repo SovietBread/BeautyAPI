@@ -1684,11 +1684,11 @@ public async Task<IActionResult> CreateAppointment()
                     e.CashAmount,
                     e.CardAmount,
                     e.ExpenseDate,
-                    e.Comment
+                    e.Comment,
+                    e.IsSalary
                 })
                 .ToListAsync();
-
-            // Проверяем, найдены ли записи
+                
             if (expenseRecords == null || !expenseRecords.Any())
             {
                 return NotFound("No expense records found for the specified salon and date.");
