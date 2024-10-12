@@ -1238,7 +1238,34 @@ namespace Controllers
             appointment.AppointmentDate = appointmentDate;
             appointment.Comment = comment;
 
+            var odsetek = await _context.Odsetek
+                .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId && o.ProcedureId == appointment.ProcedureId);
+
+            if (odsetek == null)
+            {
+                return BadRequest("No percentage found for this master and procedure.");
+            }
+
+            var totalAmount = cashAmount + cardAmount + fakeAmount + grouponAmount;
+            var percentage = odsetek.Percentage;
+            var amountToFind = Math.Round((totalAmount * percentage) / 100, 2);
+
+            var operationHistory = await _context.OperationHistory
+                .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId &&
+                                        o.OperationType == "income" &&
+                                        o.OperationDate.Date == appointment.AppointmentDate.Date.ToUniversalTime());
+
+            if (operationHistory == null)
+            {
+                return NotFound("Operation history not found.");
+            }
+
+            operationHistory.Amount = amountToFind;
+
+            _context.OperationHistory.Update(operationHistory);
+
             _context.Appointments.Update(appointment);
+
             await _context.SaveChangesAsync();
 
             return Ok(appointment);
