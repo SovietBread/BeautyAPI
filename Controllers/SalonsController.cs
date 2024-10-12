@@ -1370,9 +1370,44 @@ namespace Controllers
                 return BadRequest("All fields are required.");
             }
 
-            var salonId = salonIdProp.GetInt32();
-            var cashAmount = cashAmountProp.GetDecimal();
-            var cardAmount = cardAmountProp.GetDecimal();
+            int salonId;
+            if (salonIdProp.ValueKind == JsonValueKind.String)
+            {
+                if (!int.TryParse(salonIdProp.GetString(), out salonId))
+                {
+                    return BadRequest("Invalid salonId.");
+                }
+            }
+            else
+            {
+                salonId = salonIdProp.GetInt32();
+            }
+
+            decimal cashAmount;
+            if (cashAmountProp.ValueKind == JsonValueKind.String)
+            {
+                if (!decimal.TryParse(cashAmountProp.GetString(), out cashAmount))
+                {
+                    return BadRequest("Invalid cashAmount.");
+                }
+            }
+            else
+            {
+                cashAmount = cashAmountProp.GetDecimal();
+            }
+
+            decimal cardAmount;
+            if (cardAmountProp.ValueKind == JsonValueKind.String)
+            {
+                if (!decimal.TryParse(cardAmountProp.GetString(), out cardAmount))
+                {
+                    return BadRequest("Invalid cardAmount.");
+                }
+            }
+            else
+            {
+                cardAmount = cardAmountProp.GetDecimal();
+            }
 
             var incomeDate = DateTime.SpecifyKind(incomeDateProp.GetDateTime(), DateTimeKind.Utc);
 
@@ -1398,7 +1433,6 @@ namespace Controllers
 
             return CreatedAtAction(nameof(GetIncomeById), new { id = income.Id }, income);
         }
-
 
         [HttpGet("{salonId}/income")]
         public async Task<IActionResult> GetIncome([FromRoute] int salonId, [FromQuery] DateTime? date = null)
