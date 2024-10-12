@@ -1373,9 +1373,11 @@ namespace Controllers
             var salonId = salonIdProp.GetInt32();
             var cashAmount = cashAmountProp.GetDecimal();
             var cardAmount = cardAmountProp.GetDecimal();
-            var incomeDate = incomeDateProp.GetDateTime();
+
+            var incomeDate = DateTime.SpecifyKind(incomeDateProp.GetDateTime(), DateTimeKind.Utc);
+
             string comment = data.RootElement.TryGetProperty("comment", out var commentProp) ? commentProp.GetString() : null;
-            
+
             var salon = await _context.Salons.FindAsync(salonId);
             if (salon == null)
             {
@@ -1547,10 +1549,11 @@ namespace Controllers
                 cardAmount = cardAmountProp.GetDecimal();
             }
 
-            var expenseDate = DateTime.SpecifyKind(expenseDateProp.GetDateTime(), DateTimeKind.Utc); // Преобразуем в UTC
+            // Преобразуем expenseDate в UTC
+            var expenseDate = DateTime.SpecifyKind(expenseDateProp.GetDateTime(), DateTimeKind.Utc);
             var comment = commentProp.GetString();
             var isSalary = isSalaryProp.GetBoolean();
-            int? employeeId = null; // EmployeeId может быть null
+            int? employeeId = null;
 
             if (isSalary)
             {
@@ -1586,10 +1589,10 @@ namespace Controllers
                 SalonId = salonId,
                 CashAmount = cashAmount,
                 CardAmount = cardAmount,
-                ExpenseDate = expenseDate,
+                ExpenseDate = expenseDate, // Используем UTC
                 Comment = comment,
                 IsSalary = isSalary,
-                EmployeeId = employeeId,
+                EmployeeId = employeeId, // Может быть null для не-зарплатных расходов
                 DeductFromCash = deductFromCash
             };
 
@@ -1612,7 +1615,7 @@ namespace Controllers
 
             if (isSalary && deductFromCash)
             {
-                return await WithdrawFromMasterBalance(employeeId.Value, cashAmount);
+                return await WithdrawFromMasterBalance(employeeId.Value, cashAmount); // Убедитесь, что employeeId не null
             }
 
             return CreatedAtAction(nameof(GetExpenseById), new { id = expense.Id }, expense);
