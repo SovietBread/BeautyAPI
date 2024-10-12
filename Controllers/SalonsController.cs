@@ -1548,14 +1548,13 @@ namespace Controllers
                 cardAmount = cardAmountProp.GetDecimal();
             }
 
-            var expenseDate = expenseDateProp.GetDateTime();
+            var expenseDate = DateTime.SpecifyKind(expenseDateProp.GetDateTime(), DateTimeKind.Utc); // Преобразуем в UTC
             var comment = commentProp.GetString();
             var isSalary = isSalaryProp.GetBoolean();
             int? employeeId = null; // EmployeeId может быть null
 
             if (isSalary)
             {
-                // Только если это зарплата, проверяем наличие employeeId
                 if (!data.RootElement.TryGetProperty("employeeId", out var employeeIdProp))
                 {
                     return BadRequest("EmployeeId is required for salary expenses.");
@@ -1591,7 +1590,7 @@ namespace Controllers
                 ExpenseDate = expenseDate,
                 Comment = comment,
                 IsSalary = isSalary,
-                EmployeeId = employeeId, // может быть null для не-зарплатных расходов
+                EmployeeId = employeeId,
                 DeductFromCash = deductFromCash
             };
 
@@ -1602,10 +1601,10 @@ namespace Controllers
             {
                 var operationHistory = new OperationHistory
                 {
-                    MasterId = employeeId.Value, // Убедитесь, что employeeId не null
+                    MasterId = employeeId.Value,
                     Amount = cashAmount + cardAmount,
                     OperationType = "expense",
-                    OperationDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    OperationDate = DateTime.UtcNow
                 };
 
                 _context.OperationHistory.Add(operationHistory);
@@ -1614,12 +1613,11 @@ namespace Controllers
 
             if (isSalary && deductFromCash)
             {
-                return await WithdrawFromMasterBalance(employeeId.Value, cashAmount); // Убедитесь, что employeeId не null
+                return await WithdrawFromMasterBalance(employeeId.Value, cashAmount);
             }
 
             return CreatedAtAction(nameof(GetExpenseById), new { id = expense.Id }, expense);
         }
-
 
         private async Task<IActionResult> WithdrawFromMasterBalance(int masterId, decimal amount)
         {
