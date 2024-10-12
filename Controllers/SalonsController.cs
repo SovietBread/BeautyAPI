@@ -1216,10 +1216,9 @@ namespace Controllers
             var cardAmount = cardAmountProp.GetDecimal();
             var fakeAmount = fakeAmountProp.GetDecimal();
             var grouponAmount = grouponAmountProp.GetDecimal();
-            var appointmentDate = appointmentDateProp.GetDateTime();
+            var appointmentDate = DateTime.SpecifyKind(appointmentDateProp.GetDateTime(), DateTimeKind.Utc);
             var clientName = clientNameProp.GetString();
 
-            // Обрабатываем комментарий
             string comment = data.TryGetProperty("comment", out var commentProp) ? commentProp.GetString() : null;
 
             var appointment = await _context.Appointments.FindAsync(id);
@@ -1237,7 +1236,7 @@ namespace Controllers
             appointment.GrouponAmount = grouponAmount;
             appointment.SalonId = salonId;
             appointment.AppointmentDate = appointmentDate;
-            appointment.Comment = comment; // Сохраняем комментарий
+            appointment.Comment = comment;
 
             _context.Appointments.Update(appointment);
             await _context.SaveChangesAsync();
