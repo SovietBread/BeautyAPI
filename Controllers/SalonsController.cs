@@ -1085,8 +1085,7 @@ namespace Controllers
             var appointmentDate = appointmentDateProp.GetDateTime();
             var clientName = clientNameProp.GetString();
             
-            // Получаем необязательное поле isCanceled
-            var isCanceled = false; // По умолчанию false
+            var isCanceled = false;
             if (data.TryGetProperty("isCanceled", out var isCanceledProp))
             {
                 isCanceled = isCanceledProp.GetBoolean();
@@ -1094,7 +1093,6 @@ namespace Controllers
 
             appointmentDate = DateTime.SpecifyKind(appointmentDate, DateTimeKind.Utc);
 
-            // Проверка на наличие салона, мастера и процедуры
             var salon = await _context.Salons.FindAsync(salonId);
             if (salon == null)
             {
@@ -1196,6 +1194,7 @@ namespace Controllers
             var body = await reader.ReadToEndAsync();
             var data = JsonDocument.Parse(body).RootElement;
 
+            // Проверка обязательных полей
             if (!data.TryGetProperty("clientName", out var clientNameProp) ||
                 !data.TryGetProperty("masterId", out var masterIdProp) ||
                 !data.TryGetProperty("procedureId", out var procedureIdProp) ||
@@ -1209,35 +1208,33 @@ namespace Controllers
                 return BadRequest("All fields are required.");
             }
 
-            var salonId = salonIdProp.GetInt32();
-            var masterId = masterIdProp.GetInt32();
-            var procedureId = procedureIdProp.GetInt32();
-            var cashAmount = cashAmountProp.GetDecimal();
-            var cardAmount = cardAmountProp.GetDecimal();
-            var fakeAmount = fakeAmountProp.GetDecimal();
-            var grouponAmount = grouponAmountProp.GetDecimal();
-            var appointmentDate = DateTime.SpecifyKind(appointmentDateProp.GetDateTime(), DateTimeKind.Utc);
-            var clientName = clientNameProp.GetString();
+            // Извлечение новых значений из JSON
+            var newClientName = clientNameProp.GetString();
+            var newMasterId = masterIdProp.GetInt32();
+            var newProcedureId = procedureIdProp.GetInt32();
+            var newCashAmount = cashAmountProp.GetDecimal();
+            var newCardAmount = cardAmountProp.GetDecimal();
+            var newFakeAmount = fakeAmountProp.GetDecimal();
+            var newGrouponAmount = grouponAmountProp.GetDecimal();
+            var newSalonId = salonIdProp.GetInt32();
+            var newAppointmentDate = DateTime.SpecifyKind(appointmentDateProp.GetDateTime(), DateTimeKind.Utc);
 
-            string comment = data.TryGetProperty("comment", out var commentProp) ? commentProp.GetString() : null;
+            string newComment = data.TryGetProperty("comment", out var commentProp) ? commentProp.GetString() : null;
 
+            // Извлечение текущего (старого) назначения
             var appointment = await _context.Appointments.FindAsync(id);
             if (appointment == null)
             {
                 return NotFound("Appointment not found.");
             }
 
-            appointment.ClientName = clientName;
-            appointment.MasterId = masterId;
-            appointment.ProcedureId = procedureId;
-            appointment.CashAmount = cashAmount;
-            appointment.CardAmount = cardAmount;
-            appointment.FakeAmount = fakeAmount;
-            appointment.GrouponAmount = grouponAmount;
-            appointment.SalonId = salonId;
-            appointment.AppointmentDate = appointmentDate;
-            appointment.Comment = comment;
+            // Извлечение старых значений
+            var oldCashAmount = appointment.CashAmount;
+            var oldCardAmount = appointment.CardAmount;
+            var oldFakeAmount = appointment.FakeAmount;
+            var oldGrouponAmount = appointment.GrouponAmount;
 
+            // Получение процента для поиска операции
             var odsetek = await _context.Odsetek
                 .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId && o.ProcedureId == appointment.ProcedureId);
 
@@ -1246,24 +1243,42 @@ namespace Controllers
                 return BadRequest("No percentage found for this master and procedure.");
             }
 
-            var totalAmount = cashAmount + cardAmount + fakeAmount + grouponAmount;
+            // Рассчитываем сумму для поиска операции по старым данным
+            var oldTotalAmount = oldCashAmount + oldCardAmount + oldFakeAmount + oldGrouponAmount;
             var percentage = odsetek.Percentage;
-            var amountToFind = Math.Round((totalAmount * percentage) / 100, 2);
+            var amountToFind = Math.Round((oldTotalAmount * percentage) / 100, 2);
 
+            // Поиск записи в OperationHistory на основе старых данных
             var operationHistory = await _context.OperationHistory
                 .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId &&
                                         o.OperationType == "income" &&
-                                        o.OperationDate.Date == appointment.AppointmentDate.Date.ToUniversalTime());
+                                        o.OperationDate.Date == appointment.AppointmentDate.Date.ToUniversalTime() &&
+                                        o.Amount == amountToFind); // Условие для поиска записи по старой сумме
 
             if (operationHistory == null)
             {
                 return NotFound("Operation history not found.");
             }
 
-            operationHistory.Amount = amountToFind;
+            // После того, как запись найдена, обновляем Amount на основании новых данных
+            var newTotalAmount = newCashAmount + newCardAmount + newFakeAmount + newGrouponAmount;
+            var newAmount = Math.Round((newTotalAmount * percentage) / 100, 2);
+
+            operationHistory.Amount = newAmount;
+
+            // Обновление данных назначения новыми значениями
+            appointment.ClientName = newClientName;
+            appointment.MasterId = newMasterId;
+            appointment.ProcedureId = newProcedureId;
+            appointment.CashAmount = newCashAmount;
+            appointment.CardAmount = newCardAmount;
+            appointment.FakeAmount = newFakeAmount;
+            appointment.GrouponAmount = newGrouponAmount;
+            appointment.SalonId = newSalonId;
+            appointment.AppointmentDate = newAppointmentDate;
+            appointment.Comment = newComment;
 
             _context.OperationHistory.Update(operationHistory);
-
             _context.Appointments.Update(appointment);
 
             await _context.SaveChangesAsync();
