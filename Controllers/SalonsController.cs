@@ -1762,7 +1762,7 @@ namespace Controllers
                     e.ExpenseDate,
                     e.Comment,
                     e.IsSalary,
-                    e.EmployeeId
+                    MasterName = _context.Masters.Where(m => m.Id == e.EmployeeId).Select(m => m.Name).FirstOrDefault()
                 })
                 .ToListAsync();
                 
