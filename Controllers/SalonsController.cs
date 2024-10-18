@@ -1761,7 +1761,8 @@ namespace Controllers
                     e.CardAmount,
                     e.ExpenseDate,
                     e.Comment,
-                    e.IsSalary
+                    e.IsSalary,
+                    e.EmployeeId
                 })
                 .ToListAsync();
                 
