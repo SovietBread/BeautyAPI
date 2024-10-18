@@ -1194,7 +1194,6 @@ namespace Controllers
             var body = await reader.ReadToEndAsync();
             var data = JsonDocument.Parse(body).RootElement;
 
-            // Проверка обязательных полей
             if (!data.TryGetProperty("clientName", out var clientNameProp) ||
                 !data.TryGetProperty("masterId", out var masterIdProp) ||
                 !data.TryGetProperty("procedureId", out var procedureIdProp) ||
@@ -1208,7 +1207,6 @@ namespace Controllers
                 return BadRequest("All fields are required.");
             }
 
-            // Извлечение новых значений из JSON
             var newClientName = clientNameProp.GetString();
             var newMasterId = masterIdProp.GetInt32();
             var newProcedureId = procedureIdProp.GetInt32();
@@ -1221,20 +1219,17 @@ namespace Controllers
 
             string newComment = data.TryGetProperty("comment", out var commentProp) ? commentProp.GetString() : null;
 
-            // Извлечение текущего (старого) назначения
             var appointment = await _context.Appointments.FindAsync(id);
             if (appointment == null)
             {
                 return NotFound("Appointment not found.");
             }
 
-            // Извлечение старых значений
             var oldCashAmount = appointment.CashAmount;
             var oldCardAmount = appointment.CardAmount;
             var oldFakeAmount = appointment.FakeAmount;
             var oldGrouponAmount = appointment.GrouponAmount;
 
-            // Получение процента для поиска операции
             var odsetek = await _context.Odsetek
                 .FirstOrDefaultAsync(o => o.MasterId == appointment.MasterId && o.ProcedureId == appointment.ProcedureId);
 
@@ -1727,11 +1722,6 @@ namespace Controllers
                 return BadRequest("Master has no salary record.");
             }
 
-            if (master.Salary.Balance < amount)
-            {
-                return BadRequest("Insufficient funds.");
-            }
-
             master.Salary.Balance -= amount;
             await _context.SaveChangesAsync();
 
@@ -1741,10 +1731,8 @@ namespace Controllers
         [HttpGet("{salonId}/expense")]
         public async Task<IActionResult> GetExpenses([FromRoute] int salonId, [FromQuery] DateTime? date = null)
         {
-            // Используем текущую дату, если параметр date не указан
             date ??= DateTime.UtcNow.Date;
 
-            // Приведение даты к UTC, если дата имеет Kind.Unspecified
             if (date.Value.Kind == DateTimeKind.Unspecified)
             {
                 date = DateTime.SpecifyKind(date.Value, DateTimeKind.Utc);
