@@ -847,6 +847,20 @@ namespace Controllers
             _context.Procedures.Add(procedure);
             await _context.SaveChangesAsync();
 
+            var masters = await _context.Masters
+                .Where(m => m.SalonId == salonId && !m.IsTerminated)
+                .ToListAsync();
+
+            var odseteks = masters.Select(master => new Odsetek
+            {
+                MasterId = master.Id,
+                ProcedureId = procedure.Id,
+                Percentage = 0
+            }).ToList();
+
+            _context.Odsetek.AddRange(odseteks);
+            await _context.SaveChangesAsync();
+
             return Ok("Procedure created successfully.");
         }
 
